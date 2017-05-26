@@ -12,7 +12,23 @@ from keras.optimizers import SGD
 inception_model = InceptionV3(weights='imagenet')
 # deal with truncated images
 from PIL import ImageFile
+from PIL import Image
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+from sklearn.preprocessing import StandardScaler
+
+def preprocessing(x):
+# remove the mean and divide by standard deviation
+    standardscaler = StandardScaler()
+
+    new_image = np.zeros((x.shape))
+
+    for i in range(3): # for each channel
+        new_image[:,:,i] = np.array([standardscaler.fit_transform(x[:,:,i])])
+
+
+
+    return new_image
+
 
 # we chose to train the top 2 inception blocks, i.e. we will freeze
 # the first 172 layers and unfreeze the rest:
@@ -25,42 +41,34 @@ def build_model():
     x = GlobalAveragePooling2D()(x)
     # let's add a fully-connected layer
     x = Dense(1024, activation='relu')(x)
-    # and a logistic layer -- let's say we have 200 classes
+    # and a logistic layer -- let's say we have 3 classes
     predictions = Dense(3, activation='softmax')(x)
 
     # this is the model we will train
     model = Model(inputs=base_model.input, outputs=predictions)
 
-    # first: train only the top layers (which were randomly initialized)
-    # i.e. freeze all convolutional InceptionV3 layers
-    for layer in base_model.layers:
-        layer.trainable = False
 
-    # compile the model (should be done *after* setting layers to non-trainable)
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
-    # we chose to train the top 2 inception blocks, i.e. we will freeze
-    # the first 172 layers and unfreeze the rest:
+
+
     for layer in model.layers[:172]:
-        layer.trainable = False
+        layer.trainable = True
     for layer in model.layers[172:]:
         layer.trainable = True
 
-    # we need to recompile the model for these modifications to take effect
-    # we use SGD with a low learning rate
     sgd = SGD(lr=.001)
-    model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
 
 #set up generators
 def build_generators():
     """Image generators with data augmentation"""
-    train_datagen_inception = ImageDataGenerator(
-                                   rotation_range=40,
-                                   width_shift_range=0.15,
-                                   height_shift_range=0.15,
-                                   shear_range=0.15,
-                                   zoom_range=0.15,
+    train_datagen_inception = ImageDataGenerator(preprocessing_function=preprocessing,
+                                   rotation_range=90,
+                                   width_shift_range=0.05,
+                                   height_shift_range=0.05,
+                                   shear_range=0.05,
+                                   zoom_range=0.05,
                                    horizontal_flip=True,
                                     vertical_flip=True,
                                    fill_mode='nearest')
@@ -68,7 +76,8 @@ def build_generators():
                                                         target_size=[229, 229],
                                                         batch_size=16,
                                                        classes=['type_1','type_2','type_3'])
-    validation_datagen_inception = ImageDataGenerator(rotation_range=10,
+    validation_datagen_inception = ImageDataGenerator(preprocessing_function=preprocessing,
+        rotation_range=5,
                                     width_shift_range=0.05,
                                     height_shift_range=0.05,
                                     shear_range=0.05,
@@ -107,10 +116,10 @@ def trainer(model, num_epochs,train_gen, val_gen,
         else:
             # train the model on the new data for a few epochs
             l = model.fit_generator(train_gen,
-                        steps_per_epoch=32,
+                        steps_per_epoch=16,
                         epochs=1,
                         validation_data=val_gen,
-                        validation_steps=32)
+                        validation_steps=16)
             loss.append(l)
     # finished training
     # serialize model to YAML
@@ -125,11 +134,11 @@ def trainer(model, num_epochs,train_gen, val_gen,
 if __name__ =='__main__':
 
     # PARAMETERS
-    num_epochs = 1000
+    num_epochs = 2000
     # Save weights
-    save_weights = 'inception_v3_bottleneck_last_two_more_augmentation.h5'
+    save_weights = 'inception_adam_all_layers_normalizedPixels.h5'
     # Load weights
-    load_weights = 'inception_v3_bottleneck_last_two.h5'
+    load_weights = None
     #create generators
     train_gen, val_gen = build_generators()
     #Create he model
@@ -138,5 +147,5 @@ if __name__ =='__main__':
     # train the model
     loss = trainer(model, num_epochs,train_gen, val_gen,load_weights, save_weights)
     #save the loss
-    with open('loss/loss_inception_1000epochs','wb') as fp:
+    with open('loss/loss_inception_adam_1000epochs','wb') as fp:
         pickle.dump(loss,fp)
