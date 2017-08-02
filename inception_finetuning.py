@@ -116,10 +116,10 @@ def trainer(model, num_epochs,train_gen, val_gen,
         else:
             # train the model on the new data for a few epochs
             l = model.fit_generator(train_gen,
-                        steps_per_epoch=8,
+                        steps_per_epoch=16,
                         epochs=1,
                         validation_data=val_gen,
-                        validation_steps=8)
+                        validation_steps=16)
             loss.append(l)
     # finished training
     # serialize model to YAML
@@ -134,11 +134,11 @@ def trainer(model, num_epochs,train_gen, val_gen,
 if __name__ =='__main__':
 
     # PARAMETERS
-    num_epochs = 4000
+    num_epochs = 2000
     # Save weights
-    save_weights = 'inception_adam_all_normalized_8batch_8k.h5'
+    save_weights = 'inception_adam_all_layers_normalizedPixels.h5'
     # Load weights
-    load_weights = 'inception_adam_all_normalized_8batch.h5'
+    load_weights = None
     #create generators
     train_gen, val_gen = build_generators()
     #Create he model
